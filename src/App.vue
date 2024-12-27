@@ -38,12 +38,17 @@ const readAsText = async (file: any) => {
 		})
 }
 
-const upload = async (input: any) => {
-  const files : Blob[] = [...input.target.files];
-  data.value = await Promise.all(files.map(f => { return readAsText(f) }));
-  dataParsed.value = data.value.flatMap((r : any) => JSON.parse(r.data)).filter((song: Song) => song.ms_played >= 20000);
+const files = ref<Blob[]>([]);
 
-  // regroupement par musique pour voir la plus écoutée
+const upload = async () => {
+  data.value = await Promise.all(files.value.map(f => { return readAsText(f) }));
+  dataParsed.value = data.value.flatMap((r : any) => JSON.parse(r.data)).filter((song: Song) => song.ms_played >= 20000);
+}
+
+const tab = ref<string>();
+
+const mostListenedSong = () => {
+  // regroupement par musique
   list.value = Object.values(dataParsed.value.reduce(
     (r: any, c: Song) => {
       r[c.spotify_track_uri] = r[c.spotify_track_uri] || {id: c.spotify_track_uri, name: c.master_metadata_track_name, artist: c.master_metadata_album_artist_name, total_time: Math.trunc(c.ms_played/1000), count: 1};
@@ -54,16 +59,77 @@ const upload = async (input: any) => {
 
   list.value.sort((a: any, b: any) => b.count - a.count);
 }
+
+const mostListenedArtist = () => {
+  // regroupement par artiste
+  list.value = Object.values(dataParsed.value.reduce(
+    (r: any, c: Song) => {
+      r[c.master_metadata_album_artist_name] = r[c.master_metadata_album_artist_name] || {artist: c.master_metadata_album_artist_name, total_time: Math.trunc(c.ms_played/1000), count: 1};
+      r[c.master_metadata_album_artist_name].total_time += Math.trunc(c.ms_played/1000);
+      r[c.master_metadata_album_artist_name].count += 1;
+      return r;
+    },{}));
+
+  list.value.sort((a: any, b: any) => b.count - a.count);
+}
+
+const mostListenedAlbum = () => {
+  // regroupement par album
+  list.value = Object.values(dataParsed.value.reduce(
+    (r: any, c: Song) => {
+      r[c.master_metadata_album_album_name] = r[c.master_metadata_album_album_name] || {album: c.master_metadata_album_album_name, total_time: Math.trunc(c.ms_played/1000), count: 1};
+      r[c.master_metadata_album_album_name].total_time += Math.trunc(c.ms_played/1000);
+      r[c.master_metadata_album_album_name].count += 1;
+      return r;
+    },{}));
+
+  list.value.sort((a: any, b: any) => b.count - a.count);
+}
 </script>
 
 <template>
-  <div>
-    <input @change="upload" type="file" multiple/>
-  </div>
+  <v-file-upload density="compact" variant="compact" title="Drag and drop Spotify history files" v-model="files" multiple clearable show-size>
+    <template v-slot:item="{ props: itemProps }">
+      <v-file-upload-item v-bind="itemProps" lines="one" nav>
+        <template v-slot:prepend>
+          <v-avatar size="32" rounded></v-avatar>
+        </template>
 
-  <div v-if="list.length > 0" v-for="(song, index) in list">
-    <div>n°{{index+1}} : {{ song.name }} de {{ song.artist }} - {{ song.count }} écoutes soit {{ (song.total_time/3600).toFixed(2) }}h</div>
-  </div>
+        <template v-slot:clear="{ props: clearProps }">
+          <v-btn color="primary" v-bind="clearProps"></v-btn>
+        </template>
+      </v-file-upload-item>
+    </template>
+  </v-file-upload>
+  <v-btn color="green" @click="upload">Import</v-btn>
+
+  <v-tabs
+      v-model="tab"
+      bg-color="primary"
+    >
+    <v-tab value="one" @click="mostListenedSong">Most listened-to song</v-tab>
+    <v-tab value="two" @click="mostListenedArtist">Most listened-to artist</v-tab>
+    <v-tab value="three" @click="mostListenedAlbum">Most listened-to album</v-tab>
+  </v-tabs>
+  <v-card-text>
+      <v-tabs-window v-model="tab">
+        <v-tabs-window-item value="one">
+          <div v-if="list.length > 0" v-for="(song, index) in list">
+            <div>n°{{index+1}} : {{ song.name }} by {{ song.artist }} - {{ song.count }} listens - {{ Math.trunc(song.total_time/(3600*24)) }}d{{ Math.trunc(song.total_time%(3600*24)/3600) }}h{{ Math.trunc((song.total_time%3600)/60) }}m{{ (song.total_time%3600)%60 }}s</div>
+          </div>
+        </v-tabs-window-item>
+        <v-tabs-window-item value="two">
+          <div v-if="list.length > 0" v-for="(artist, index) in list">
+            <div>n°{{index+1}} : {{ artist.artist }} - listened to {{ artist.count }} times for {{ Math.trunc(artist.total_time/(3600*24)) }}d{{ Math.trunc(artist.total_time%(3600*24)/3600) }}h{{ Math.trunc((artist.total_time%3600)/60) }}m{{ (artist.total_time%3600)%60 }}s</div>
+          </div>
+        </v-tabs-window-item>
+        <v-tabs-window-item value="three">
+          <div v-if="list.length > 0" v-for="(album, index) in list">
+            <div>n°{{index+1}} : {{ album.album }} - listened {{ album.count }} songs of it for {{ Math.trunc(album.total_time/(3600*24)) }}d{{ Math.trunc(album.total_time%(3600*24)/3600) }}h{{ Math.trunc((album.total_time%3600)/60) }}m{{ (album.total_time%3600)%60 }}s</div>
+          </div>
+        </v-tabs-window-item>
+      </v-tabs-window>
+    </v-card-text>
 </template>
 
 <style scoped>
