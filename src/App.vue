@@ -1,8 +1,13 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import dayjs from 'dayjs'
-import weekday from 'dayjs/plugin/weekday'
-import duration from 'dayjs/plugin/duration'
+
+import { Chart, registerables } from 'chart.js';
+import { PolarAreaChart } from 'vue-chart-3';
+Chart.register(...registerables);
+
+import dayjs from 'dayjs';
+import weekday from 'dayjs/plugin/weekday';
+import duration from 'dayjs/plugin/duration';
 dayjs.extend(weekday);
 dayjs.extend(duration);
 
@@ -61,12 +66,14 @@ const durationParsed = (time: number) => {
 
 const mostListenedSongList = ref<any[]>([]);
 const mostListenedArtistList = ref<any[]>([]);
+const mostListenedHourList = ref<any[]>([]);
 
 const mostListenedSong = () => {
   if (mostListenedSongList.value.length !== 0) return;
   // regroupement par musique
   const list = Object.values(dataParsed.value.reduce(
     (r: any, c: Song) => {
+      if (!c.spotify_track_uri) return r;
       r[c.spotify_track_uri] = r[c.spotify_track_uri] || {id: c.spotify_track_uri, name: c.master_metadata_track_name, artist: c.master_metadata_album_artist_name, total_time: Math.trunc(c.ms_played/1000), count: 1};
       r[c.spotify_track_uri].total_time += Math.trunc(c.ms_played/1000);
       r[c.spotify_track_uri].count += 1;
@@ -106,7 +113,8 @@ const mostListenedAlbum = ():any[] => {
   return list;
 }
 
-const mostListenedHour = ():any[] => {
+const mostListenedHour = () => {
+  if (mostListenedHourList.value.length !== 0) return;
   // regroupement par heure
   const list = Object.values(dataParsed.value.reduce(
     (r: any, c: Song) => {
@@ -117,8 +125,12 @@ const mostListenedHour = ():any[] => {
       return r;
     },{}));
 
-  list.sort((a: any, b: any) => b.count - a.count);
-  return list;
+  list.sort((a: any, b: any) => b.total_time - a.total_time);
+  mostListenedHourList.value = list;
+  /*mostListenedHourList.value = list.map((hour: any) => hour.total_time);
+  const total = mostListenedHourList.value.reduce((a, b) => a + b);
+  mostListenedHourList.value = mostListenedHourList.value.map((hour: number) => (hour/total)*100);
+  console.log(mostListenedHourList.value);*/
 }
 
 const mostListenedDay = ():any[] => {
@@ -135,6 +147,18 @@ const mostListenedDay = ():any[] => {
   list.sort((a: any, b: any) => b.count - a.count);
   return list;
 }
+
+
+/*const options = {
+  responsive: true,
+  plugins: {
+    datalabels: {
+      color: 'white',
+      anchor: 'end',
+      align: 'end',
+    },
+  },
+};*/
 </script>
 
 <template>
@@ -160,15 +184,17 @@ const mostListenedDay = ():any[] => {
     <v-tab value="1" @click="mostListenedSong">Most listened-to song</v-tab>
     <v-tab value="2" @click="mostListenedArtist">Most listened-to artist</v-tab>
     <v-tab value="3">Most listened-to album</v-tab>
-    <v-tab value="4">Most listened-to hour</v-tab>
+    <v-tab value="4" @click="mostListenedHour">Most listened-to hour</v-tab>
     <v-tab value="5">Most listened-to day</v-tab>
   </v-tabs>
   <v-card-text>
       <v-tabs-window v-model="tab">
         <v-tabs-window-item value="1">
-          <div v-for="(song, index) in mostListenedSongList">
+          <v-data-table :items="mostListenedSongList">
+          </v-data-table>
+          <!--<div v-for="(song, index) in mostListenedSongList">
             <div>n°{{index+1}} : {{ song.name }} by {{ song.artist }} - {{ song.count }} listens - {{ durationParsed(song.total_time) }}</div>
-          </div>
+          </div>-->
         </v-tabs-window-item>
         <v-tabs-window-item value="2">
           <div v-for="(artist, index) in mostListenedArtistList">
@@ -181,7 +207,8 @@ const mostListenedDay = ():any[] => {
           </div>
         </v-tabs-window-item>
         <v-tabs-window-item value="4">
-          <div v-for="(hour, index) in mostListenedHour()">
+          <!--<PolarAreaChart :chartData="mostListenedHourList" :options="options" :height="300"/>-->
+          <div v-for="(hour, index) in mostListenedHourList">
             <div>n°{{index+1}} : {{ hour.hour }}h for {{ durationParsed(hour.total_time) }}</div>
           </div>
         </v-tabs-window-item>
